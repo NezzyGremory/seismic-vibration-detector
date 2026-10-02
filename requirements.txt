@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+numpy
+pydantic
+
+# hanya untuk menjalankan tests/test_api.py
+pytest
+httpx

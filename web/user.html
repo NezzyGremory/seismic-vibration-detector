@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Earthquake Alert - Prototype</title>
+    <link rel="stylesheet" href="/web/user.css">
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <header class="header">
+            <div class="header-title-box">
+                <span class="badge alert-badge">USER CLIENT</span>
+                <h1>EARTHQUAKE ALERT</h1>
+                <p class="subtitle">Realtime Emergency Warning Receiver</p>
+            </div>
+            <div id="sysBanner" class="status-banner status-waiting">
+                <span class="status-indicator"></span>
+                <span id="sysBannerText">MENUNGGU SENSOR</span>
+            </div>
+        </header>
+
+        <!-- SERVER STATUS NOTIFICATION -->
+        <div id="userNotification" class="alert-box alert-info" style="display: none;">
+            <div class="alert-icon">ℹ️</div>
+            <div class="alert-content">
+                <strong id="userNotificationTitle">Informasi</strong>
+                <p id="userNotificationMsg">Pesan sistem...</p>
+            </div>
+            <button id="userNotificationClose" class="alert-close">&times;</button>
+        </div>
+
+        <!-- CONNECTION SETTINGS -->
+        <section class="card config-card">
+            <h2 class="card-title">KONEKSI KE SERVER FASTAPI</h2>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="serverIp">Server IP</label>
+                    <input type="text" id="serverIp" placeholder="192.168.1.10" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="serverPort">Port</label>
+                    <input type="text" id="serverPort" placeholder="8000" autocomplete="off">
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button id="connectBtn" class="btn btn-primary">HUBUNGKAN KE SERVER</button>
+            </div>
+
+            <div class="status-tags">
+                <div class="tag">
+                    <span class="dot" id="wsDot"></span>
+                    <span class="tag-label">Koneksi:</span>
+                    <strong id="wsStatusText">DISCONNECTED</strong>
+                </div>
+                <div class="tag">
+                    <span class="dot" id="armDot"></span>
+                    <span class="tag-label">Sistem Alert:</span>
+                    <strong id="armStatusText">STANDBY</strong>
+                </div>
+            </div>
+        </section>
+
+        <!-- ALERT SYSTEM ACTIVATION -->
+        <section class="card arm-card">
+            <h2 class="card-title">AKTIVASI ALARM SUARA & GETARAN</h2>
+            <p class="arm-info-text">
+                Browser memerlukan interaksi pengguna sebelum dapat memutar suara alarm dan getaran secara otomatis saat menerima peringatan.
+            </p>
+            <div class="btn-group flex-col">
+                <button id="armBtn" class="btn btn-success">🔔 AKTIFKAN PERINGATAN (ARM SYSTEM)</button>
+                <button id="testAlarmBtn" class="btn btn-secondary">🔊 TEST SUARA & GETARAN</button>
+            </div>
+            <div class="features-status">
+                <span id="vibrationSupportBadge" class="badge-feature">Vibration: Memeriksa...</span>
+                <span id="audioSupportBadge" class="badge-feature">Web Audio: Siap</span>
+            </div>
+        </section>
+
+        <!-- SYSTEM MONITORING STATUS -->
+        <section class="card status-card">
+            <h2 class="card-title">STATUS SISTEM MONITORING</h2>
+            <div class="dashboard-grid">
+                <div class="dash-item">
+                    <span class="dash-label">SERVER STATUS</span>
+                    <strong id="dashServerVal" class="dash-val val-green">ONLINE</strong>
+                </div>
+                <div class="dash-item">
+                    <span class="dash-label">KONEKSI WEBSOCKET</span>
+                    <strong id="dashConnVal" class="dash-val">DISCONNECTED</strong>
+                </div>
+                <div class="dash-item">
+                    <span class="dash-label">ALERT ENGINE</span>
+                    <strong id="dashArmVal" class="dash-val val-muted">STANDBY</strong>
+                </div>
+                <div class="dash-item">
+                    <span class="dash-label">LAST ALERT</span>
+                    <strong id="dashLastAlertVal" class="dash-val val-muted">None</strong>
+                </div>
+            </div>
+            <div class="waiting-prompt">
+                <span class="radar-dot"></span>
+                <span>Waiting for earthquake detection from sensor phones...</span>
+            </div>
+        </section>
+
+        <!-- RECENT ALERTS HISTORY -->
+        <section class="card history-card">
+            <div class="history-header">
+                <h2 class="card-title">RECENT ALERTS (HISTORI KEJADIAN)</h2>
+                <button id="refreshHistoryBtn" class="btn-sm" title="Muat ulang riwayat">Refresh</button>
+            </div>
+            <div id="alertsList" class="alerts-list">
+                <div class="history-empty">Belum ada riwayat anomali getaran tercatat.</div>
+            </div>
+        </section>
+
+        <!-- SCIENTIFIC DISCLAIMER -->
+        <footer class="footer">
+            <p class="disclaimer">
+                <strong>Catatan Penelitian:</strong> Prototype penerima peringatan getaran berbasis sensor accelerometer smartphone.
+                Sistem <strong>BUKAN</strong> seismometer profesional, <strong>TIDAK</strong> memprediksi gempa bumi, dan <strong>BUKAN</strong> sistem peringatan dini resmi BMKG.
+            </p>
+        </footer>
+    </div>
+
+    <!-- ======================================================================
+         FULLSCREEN EMERGENCY WARNING OVERLAY
+         Tampil memenuhi layar ketika server mengirim EARTHQUAKE_ALERT
+         ====================================================================== -->
+    <div id="alertOverlay" class="alert-overlay" style="display: none;">
+        <div class="overlay-container">
+            <div class="overlay-pulse-ring"></div>
+            
+            <div class="overlay-icon">⚠️</div>
+
+            <h1 class="overlay-title">WARNING GEMPA</h1>
+            <h2 class="overlay-subtitle">ANOMALI GETARAN TERDETEKSI</h2>
+
+            <p class="overlay-desc">
+                Sistem menerima indikasi getaran abnormal dari sensor accelerometer smartphone.
+            </p>
+
+            <div class="overlay-details">
+                <div class="detail-row">
+                    <span class="detail-label">Sumber Sensor:</span>
+                    <strong id="alertSourceVal" class="detail-value">android-001</strong>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Waktu Deteksi:</span>
+                    <strong id="alertTimeVal" class="detail-value">23:21:47</strong>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">RMS / Peak:</span>
+                    <strong id="alertParamsVal" class="detail-value">RMS: 0.85 m/s² | Peak: 1.42 m/s²</strong>
+                </div>
+            </div>
+
+            <div class="overlay-actions">
+                <button id="muteAlarmBtn" class="btn btn-overlay-mute">🔇 MATIKAN SUARA</button>
+                <button id="dismissAlertBtn" class="btn btn-overlay-dismiss">✓ SAYA MENGERTI</button>
+            </div>
+
+            <p class="overlay-disclaimer">
+                Prototype penelitian laboratorium. Tetap tenang dan periksa lingkungan sekitar.
+            </p>
+        </div>
+    </div>
+
+    <script src="/web/user.js"></script>
+</body>
+</html>

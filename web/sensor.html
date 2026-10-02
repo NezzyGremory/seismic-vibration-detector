@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Earthquake Vibration Sensor - Prototype</title>
+    <link rel="stylesheet" href="/web/sensor.css">
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <header class="header">
+            <div class="header-title-box">
+                <span class="badge prototype-badge">PROTOTYPE V1</span>
+                <h1>EARTHQUAKE SENSOR</h1>
+                <p class="subtitle">Mobile Accelerometer Vibration Node</p>
+            </div>
+            <div id="statusBanner" class="status-banner status-normal">
+                <span class="status-indicator"></span>
+                <span id="statusBannerText">NORMAL</span>
+            </div>
+        </header>
+
+        <!-- ERROR / NOTIFICATION BANNER -->
+        <div id="errorAlert" class="alert-box alert-error" style="display: none;">
+            <div class="alert-icon">⚠️</div>
+            <div class="alert-content">
+                <strong id="alertTitle">Peringatan</strong>
+                <p id="alertMessage">Pesan error akan muncul di sini.</p>
+            </div>
+            <button id="alertCloseBtn" class="alert-close">&times;</button>
+        </div>
+
+        <!-- CONNECTION & DEVICE SETTINGS -->
+        <section class="card config-card">
+            <h2 class="card-title">KONEKSI & PERANGKAT</h2>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="serverIp">Server IP</label>
+                    <input type="text" id="serverIp" placeholder="192.168.1.10" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="serverPort">Port</label>
+                    <input type="text" id="serverPort" placeholder="8000" autocomplete="off">
+                </div>
+            </div>
+
+            <div class="device-row">
+                <span class="label">Device ID:</span>
+                <span id="deviceIdDisplay" class="value-highlight">android-xxxxxx</span>
+                <button id="regenIdBtn" class="btn-sm" title="Generate ID baru">Ubah</button>
+            </div>
+
+            <div class="btn-group">
+                <button id="connectBtn" class="btn btn-primary">HUBUNGKAN WEBSOCKET</button>
+            </div>
+
+            <div class="status-tags">
+                <div class="tag">
+                    <span class="dot" id="wsDot"></span>
+                    <span class="tag-label">WebSocket:</span>
+                    <strong id="wsStatusText">DISCONNECTED</strong>
+                </div>
+                <div class="tag">
+                    <span class="dot" id="sensorDot"></span>
+                    <span class="tag-label">Sensor:</span>
+                    <strong id="sensorStatusText">INACTIVE</strong>
+                </div>
+            </div>
+        </section>
+
+        <!-- SENSOR CONTROLS -->
+        <section class="card sensor-control-card">
+            <div class="sensor-control-header">
+                <h2 class="card-title">KONTROL SENSOR FISIK</h2>
+                <span id="sensorModeBadge" class="sensor-mode-badge">Menunggu sensor...</span>
+            </div>
+            <p class="sensor-info-text">
+                Gunakan sensor accelerometer internal smartphone Android untuk mengukur getaran secara realtime.
+            </p>
+            <div class="btn-group">
+                <button id="sensorToggleBtn" class="btn btn-success" disabled>AKTIFKAN SENSOR</button>
+            </div>
+        </section>
+
+        <!-- LIVE ACCELERATION VALUES -->
+        <section class="card values-card">
+            <h2 class="card-title">REALTIME ACCELERATION (m/s²)</h2>
+            <div class="axis-grid">
+                <div class="axis-item axis-x">
+                    <div class="axis-header">
+                        <span class="axis-name">SUMBU X</span>
+                        <span class="axis-sub">Lateral</span>
+                    </div>
+                    <div id="accelX" class="axis-value">0.000</div>
+                </div>
+
+                <div class="axis-item axis-y">
+                    <div class="axis-header">
+                        <span class="axis-name">SUMBU Y</span>
+                        <span class="axis-sub">Longitudinal</span>
+                    </div>
+                    <div id="accelY" class="axis-value">0.000</div>
+                </div>
+
+                <div class="axis-item axis-z">
+                    <div class="axis-header">
+                        <span class="axis-name">SUMBU Z</span>
+                        <span class="axis-sub">Vertikal</span>
+                    </div>
+                    <div id="accelZ" class="axis-value">0.000</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- REALTIME WAVEFORM CANVAS -->
+        <section class="card chart-card">
+            <div class="chart-header">
+                <h2 class="card-title">WAVEFORM GETARAN (SLIDING WINDOW)</h2>
+                <div class="legend">
+                    <span class="legend-item"><span class="legend-dot dot-x"></span>X</span>
+                    <span class="legend-item"><span class="legend-dot dot-y"></span>Y</span>
+                    <span class="legend-item"><span class="legend-dot dot-z"></span>Z</span>
+                </div>
+            </div>
+            <div class="canvas-wrapper">
+                <canvas id="waveformCanvas" width="600" height="220"></canvas>
+            </div>
+        </section>
+
+        <!-- SERVER ANALYSIS RESULTS -->
+        <section class="card analysis-card">
+            <h2 class="card-title">HASIL ANALISIS SERVER (FASTAPI)</h2>
+            <div class="metrics-grid">
+                <div class="metric-box">
+                    <span class="metric-label">STATUS GETARAN</span>
+                    <div id="serverStatusVal" class="metric-value status-text-normal">NORMAL</div>
+                </div>
+                <div class="metric-box">
+                    <span class="metric-label">RMS ACCEL</span>
+                    <div id="serverRmsVal" class="metric-value">0.0000 m/s²</div>
+                </div>
+                <div class="metric-box">
+                    <span class="metric-label">PEAK ACCEL</span>
+                    <div id="serverPeakVal" class="metric-value">0.0000 m/s²</div>
+                </div>
+                <div class="metric-box">
+                    <span class="metric-label">MAGNITUDE (|a|)</span>
+                    <div id="serverMagVal" class="metric-value">0.0000 m/s²</div>
+                </div>
+            </div>
+            <div class="window-info-row">
+                <span>Window Buffer: <strong id="windowSamplesVal">0</strong> sampel</span>
+                <span>Analisis Siap: <strong id="windowReadyVal">TIDAK</strong></span>
+            </div>
+        </section>
+
+        <!-- STREAM STATS & DEBUG PANEL -->
+        <section class="card stats-card">
+            <div class="debug-toggle-row">
+                <h2 class="card-title">STATISTIK STREAMING</h2>
+                <button id="toggleDebugBtn" class="btn-text">Debug Panel ▼</button>
+            </div>
+            <div class="metrics-grid stats-grid">
+                <div class="metric-box">
+                    <span class="metric-label">TOTAL SAMPEL</span>
+                    <div id="sampleCountVal" class="metric-value">0</div>
+                </div>
+                <div class="metric-box">
+                    <span class="metric-label">SAMPLING RATE</span>
+                    <div id="sampleRateVal" class="metric-value">0.0 Hz</div>
+                </div>
+            </div>
+
+            <!-- DEBUG DETAILS -->
+            <div id="debugPanel" class="debug-panel" style="display: none;">
+                <div class="debug-line">
+                    <span class="d-key">WebSocket URL:</span>
+                    <span id="dbgWsUrl" class="d-val">-</span>
+                </div>
+                <div class="debug-line">
+                    <span class="d-key">DeviceMotion Support:</span>
+                    <span id="dbgMotionSupport" class="d-val">-</span>
+                </div>
+                <div class="debug-line">
+                    <span class="d-key">Sensor Mode:</span>
+                    <span id="dbgSensorMode" class="d-val">-</span>
+                </div>
+                <div class="debug-line">
+                    <span class="d-key">Round-Trip Latency:</span>
+                    <span id="dbgLatency" class="d-val">- ms</span>
+                </div>
+                <div class="debug-line">
+                    <span class="d-key">Terakhir Diterima:</span>
+                    <span id="dbgLastReceived" class="d-val">-</span>
+                </div>
+                <div class="debug-line">
+                    <span class="d-key">Server Service:</span>
+                    <span id="dbgServerService" class="d-val">Earthquake Detection Server</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- SCIENTIFIC DISCLAIMER FOOTER -->
+        <footer class="footer">
+            <p class="disclaimer">
+                <strong>Catatan Penelitian:</strong> Sistem ini adalah prototype pendeteksian anomali getaran berbasis sensor accelerometer smartphone.
+                Sistem <strong>BUKAN</strong> seismometer profesional, <strong>TIDAK</strong> memprediksi gempa, dan <strong>TIDAK</strong> mengukur magnitudo gempa bumi BMKG.
+            </p>
+        </footer>
+    </div>
+
+    <script src="/web/sensor.js"></script>
+</body>
+</html>
