@@ -3,17 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Earthquake Alert - Prototype</title>
+    <title>Disaster Monitoring Alert - Prototype</title>
+    <link rel="manifest" href="/web/manifest.json">
     <link rel="stylesheet" href="/web/user.css">
 </head>
+
 <body>
     <div class="container">
         <!-- HEADER -->
         <header class="header">
             <div class="header-title-box">
                 <span class="badge alert-badge">USER CLIENT</span>
-                <h1>EARTHQUAKE ALERT</h1>
-                <p class="subtitle">Realtime Emergency Warning Receiver</p>
+                <h1>DISASTER MONITORING ALERT</h1>
+                <p class="subtitle">Realtime Emergency Warning Receiver (Earthquake & Flood)</p>
             </div>
             <div id="sysBanner" class="status-banner status-waiting">
                 <span class="status-indicator"></span>
@@ -92,17 +94,17 @@
                     <strong id="dashConnVal" class="dash-val">DISCONNECTED</strong>
                 </div>
                 <div class="dash-item">
-                    <span class="dash-label">ALERT ENGINE</span>
-                    <strong id="dashArmVal" class="dash-val val-muted">STANDBY</strong>
+                    <span class="dash-label">EARTHQUAKE SENSOR</span>
+                    <strong id="dashQuakeVal" class="dash-val val-green">NORMAL</strong>
                 </div>
                 <div class="dash-item">
-                    <span class="dash-label">LAST ALERT</span>
-                    <strong id="dashLastAlertVal" class="dash-val val-muted">None</strong>
+                    <span class="dash-label">FLOOD SENSOR</span>
+                    <strong id="dashFloodVal" class="dash-val val-green">NORMAL</strong>
                 </div>
             </div>
             <div class="waiting-prompt">
                 <span class="radar-dot"></span>
-                <span>Waiting for earthquake detection from sensor phones...</span>
+                <span>Waiting for earthquake or flood alerts from active sensors...</span>
             </div>
         </section>
 
@@ -113,33 +115,33 @@
                 <button id="refreshHistoryBtn" class="btn-sm" title="Muat ulang riwayat">Refresh</button>
             </div>
             <div id="alertsList" class="alerts-list">
-                <div class="history-empty">Belum ada riwayat anomali getaran tercatat.</div>
+                <div class="history-empty">Belum ada riwayat anomali/peringatan tercatat.</div>
             </div>
         </section>
 
         <!-- SCIENTIFIC DISCLAIMER -->
         <footer class="footer">
             <p class="disclaimer">
-                <strong>Catatan Penelitian:</strong> Prototype penerima peringatan getaran berbasis sensor accelerometer smartphone.
-                Sistem <strong>BUKAN</strong> seismometer profesional, <strong>TIDAK</strong> memprediksi gempa bumi, dan <strong>BUKAN</strong> sistem peringatan dini resmi BMKG.
+                <strong>Catatan Penelitian:</strong> Prototype disaster monitoring system (Getaran Smartphone & Virtual Flood Sensor).
+                Sistem <strong>BUKAN</strong> seismometer/stasiun BMKG profesional, <strong>TIDAK</strong> memprediksi gempa/banjir secara resmi, dan <strong>BUKAN</strong> pengganti sistem peringatan resmi pemerintah.
             </p>
         </footer>
     </div>
 
     <!-- ======================================================================
          FULLSCREEN EMERGENCY WARNING OVERLAY
-         Tampil memenuhi layar ketika server mengirim EARTHQUAKE_ALERT
+         Tampil memenuhi layar ketika server mengirim EARTHQUAKE_ALERT / FLOOD_ALERT
          ====================================================================== -->
     <div id="alertOverlay" class="alert-overlay" style="display: none;">
         <div class="overlay-container">
             <div class="overlay-pulse-ring"></div>
             
-            <div class="overlay-icon">⚠️</div>
+            <div id="overlayIcon" class="overlay-icon">⚠️</div>
 
-            <h1 class="overlay-title">WARNING GEMPA</h1>
-            <h2 class="overlay-subtitle">ANOMALI GETARAN TERDETEKSI</h2>
+            <h1 id="overlayTitle" class="overlay-title">WARNING GEMPA</h1>
+            <h2 id="overlaySubtitle" class="overlay-subtitle">ANOMALI GETARAN TERDETEKSI</h2>
 
-            <p class="overlay-desc">
+            <p id="overlayDesc" class="overlay-desc">
                 Sistem menerima indikasi getaran abnormal dari sensor accelerometer smartphone.
             </p>
 
@@ -153,7 +155,7 @@
                     <strong id="alertTimeVal" class="detail-value">23:21:47</strong>
                 </div>
                 <div class="detail-row">
-                    <span class="detail-label">RMS / Peak:</span>
+                    <span class="detail-label">Parameter:</span>
                     <strong id="alertParamsVal" class="detail-value">RMS: 0.85 m/s² | Peak: 1.42 m/s²</strong>
                 </div>
             </div>
@@ -172,3 +174,4 @@
     <script src="/web/user.js"></script>
 </body>
 </html>
+

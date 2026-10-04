@@ -48,6 +48,8 @@ VIBRATION_PEAK_THRESHOLD = 1.00
 # Cooldown antar alert broadcast (dalam detik).
 # Mencegah HP user dibombardir alert setiap sampel selama getaran berlangsung.
 ALERT_COOLDOWN = 10.0
+FLOOD_ALERT_COOLDOWN = 10.0
+
 
 # ---------------------------------------------------------------------------
 # Logging

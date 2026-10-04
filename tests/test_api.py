@@ -30,7 +30,8 @@ def sample(device="android-test", x=0.12, y=0.08, z=9.72):
 def test_root(client):
     r = client.get("/")
     assert r.status_code == 200
-    assert r.json() == {"status": "online", "service": "Earthquake Detection Server"}
+    assert r.json() == {"status": "online", "service": "Earthquake & Flood Detection Server"}
+
 
 
 def test_health(client):
@@ -129,8 +130,9 @@ def test_sensor_static_assets(client):
 def test_user_page(client):
     r = client.get("/user")
     assert r.status_code == 200
-    assert "EARTHQUAKE ALERT" in r.text
+    assert "DISASTER MONITORING ALERT" in r.text
     assert "alertOverlay" in r.text
+
 
 
 def test_user_static_assets(client):
@@ -192,3 +194,91 @@ def test_user_alert_broadcast_and_cooldown(client):
             json=sample(device="sensor-dev", z=15.0),
         ).json()
         assert sensor_res_again["status"] == "ANOMALY_VIBRATION"
+
+
+def test_flood_page(client):
+    r = client.get("/flood")
+    assert r.status_code == 200
+    assert "Flood Sensor" in r.text
+    assert "Auto Sensor Simulation" in r.text
+
+
+def test_flood_api_normal(client):
+    r = client.post(
+        "/api/flood",
+        json={
+            "device_id": "flood-dev-1",
+            "water_level": 20.0,
+            "rate_of_rise": 1.0,
+            "rainfall": 5.0,
+        },
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["success"] is True
+    assert data["status"] == "NORMAL"
+    assert data["risk_level"] == 0
+
+
+def test_flood_api_warning_and_critical(client):
+    r_warn = client.post(
+        "/api/flood",
+        json={
+            "device_id": "flood-dev-1",
+            "water_level": 35.0,
+            "rate_of_rise": 3.5,
+            "rainfall": 10.0,
+        },
+    )
+    assert r_warn.status_code == 200
+    assert r_warn.json()["status"] == "FLOOD_WARNING"
+
+    r_crit = client.post(
+        "/api/flood",
+        json={
+            "device_id": "flood-dev-1",
+            "water_level": 85.0,
+            "rate_of_rise": 6.0,
+            "rainfall": 50.0,
+        },
+    )
+    assert r_crit.status_code == 200
+    assert r_crit.json()["status"] == "FLOOD_CRITICAL"
+    assert r_crit.json()["risk_level"] == 3
+
+
+def test_flood_broadcast_and_escalation(client):
+    server_main._last_flood_alert_time = 0.0
+    server_main._last_flood_alert_level = 0
+
+    with client.websocket_connect("/ws/user") as user_ws:
+        user_ws.receive_json()  # CONNECTION_ESTABLISHED
+
+        # Send WARNING (risk level 1) -> Broadcast triggered
+        client.post(
+            "/api/flood",
+            json={
+                "device_id": "node-1",
+                "water_level": 35.0,
+                "rate_of_rise": 3.2,
+                "rainfall": 10.0,
+            },
+        )
+        msg1 = user_ws.receive_json()
+        assert msg1["type"] == "FLOOD_ALERT"
+        assert msg1["status"] == "FLOOD_WARNING"
+
+        # Send CRITICAL (risk level 3 > 1) -> Escalation triggers immediate broadcast even within cooldown
+        client.post(
+            "/api/flood",
+            json={
+                "device_id": "node-1",
+                "water_level": 82.0,
+                "rate_of_rise": 7.0,
+                "rainfall": 40.0,
+            },
+        )
+        msg2 = user_ws.receive_json()
+        assert msg2["type"] == "FLOOD_ALERT"
+        assert msg2["status"] == "FLOOD_CRITICAL"
+

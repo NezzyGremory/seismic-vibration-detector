@@ -1,9 +1,10 @@
 /**
- * Earthquake Vibration Alert - User Client (Vanilla JS)
+ * Disaster Monitoring Alert - User Client (Vanilla JS)
  *
+ * Realtime Emergency Warning Receiver (Earthquake & Flood)
  * Alur:
  * Server Python (FastAPI) -> WebSocket Broadcast (/ws/user) -> User Client HP
- * -> Fullscreen Warning Overlay + Audio Siren + Vibration
+ * -> Fullscreen Warning Overlay + Audio Siren + Vibration + System Notification
  */
 
 (() => {
@@ -22,6 +23,8 @@
         alarmInterval: null,
         vibrationInterval: null,
         lastAlertTimeStr: "None",
+        reconnectTimer: null,
+        wakeLockSentinel: null,
     };
 
     // DOM Elements
@@ -51,8 +54,8 @@
         // Dashboard Status
         dashServerVal: document.getElementById("dashServerVal"),
         dashConnVal: document.getElementById("dashConnVal"),
-        dashArmVal: document.getElementById("dashArmVal"),
-        dashLastAlertVal: document.getElementById("dashLastAlertVal"),
+        dashQuakeVal: document.getElementById("dashQuakeVal"),
+        dashFloodVal: document.getElementById("dashFloodVal"),
 
         // History
         refreshHistoryBtn: document.getElementById("refreshHistoryBtn"),
@@ -60,6 +63,10 @@
 
         // Fullscreen Alert Overlay
         alertOverlay: document.getElementById("alertOverlay"),
+        overlayIcon: document.getElementById("overlayIcon"),
+        overlayTitle: document.getElementById("overlayTitle"),
+        overlaySubtitle: document.getElementById("overlaySubtitle"),
+        overlayDesc: document.getElementById("overlayDesc"),
         alertSourceVal: document.getElementById("alertSourceVal"),
         alertTimeVal: document.getElementById("alertTimeVal"),
         alertParamsVal: document.getElementById("alertParamsVal"),
@@ -97,16 +104,25 @@
             dom.audioSupportBadge.textContent = "Web Audio: NOT SUPPORTED";
             dom.audioSupportBadge.style.color = "#f87171";
         }
+
+        // Daftarkan Service Worker untuk notifikasi sistem HP
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.register("/web/sw.js").then((reg) => {
+                console.log("Service Worker terdaftar:", reg.scope);
+            }).catch((err) => {
+                console.warn("Service Worker gagal didaftarkan:", err);
+            });
+        }
     }
 
     function showNotification(title, message) {
-        dom.userNotificationTitle.textContent = title;
-        dom.userNotificationMsg.textContent = message;
-        dom.userNotification.style.display = "flex";
+        if (dom.userNotificationTitle) dom.userNotificationTitle.textContent = title;
+        if (dom.userNotificationMsg) dom.userNotificationMsg.textContent = message;
+        if (dom.userNotification) dom.userNotification.style.display = "flex";
     }
 
     function hideNotification() {
-        dom.userNotification.style.display = "none";
+        if (dom.userNotification) dom.userNotification.style.display = "none";
     }
 
     // -------------------------------------------------------------------------
@@ -125,10 +141,7 @@
         return state.audioCtx;
     }
 
-    /**
-     * Memainkan satu beep sirine darurat (frekuensi tinggi lalu rendah)
-     */
-    function playBeepTone(freq = 880, duration = 0.35) {
+    function playBeepTone(freq = 880, duration = 0.35, waveType = "sawtooth", volume = 0.6) {
         const ctx = ensureAudioContext();
         if (!ctx) return;
 
@@ -136,11 +149,11 @@
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
 
-            osc.type = "sawtooth";
+            osc.type = waveType;
             osc.frequency.setValueAtTime(freq, ctx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(freq * 0.75, ctx.currentTime + duration);
+            osc.frequency.exponentialRampToValueAtTime(freq * 0.8, ctx.currentTime + duration);
 
-            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.setValueAtTime(volume, ctx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
 
             osc.connect(gain);
@@ -153,19 +166,33 @@
         }
     }
 
-    function startAlarmSound() {
+    function startAlarmSound(hazardType = "earthquake") {
         if (state.isMuted) return;
-        stopAlarmSound(); // bersihkan timer sebelumnya jika ada
+        stopAlarmSound();
 
-        // Pola sirine: beep bernada ganda berulang setiap 700ms
         let step = 0;
-        playBeepTone(880, 0.3);
-        state.alarmInterval = setInterval(() => {
-            if (state.isMuted) return;
-            const freq = step % 2 === 0 ? 980 : 750;
-            playBeepTone(freq, 0.32);
-            step++;
-        }, 360);
+        const isFlood = (hazardType === "FLOOD_ALERT" || hazardType === "flood");
+
+        if (isFlood) {
+            // SIRINE BANJIR NYARING (Frequency 1250Hz - 650Hz, Square Wave, Volume Maksimal 0.8)
+            playBeepTone(1250, 0.35, "square", 0.8);
+            state.alarmInterval = setInterval(() => {
+                if (state.isMuted) return;
+                const freq = step % 2 === 0 ? 1250 : 650;
+                const wave = step % 2 === 0 ? "square" : "sawtooth";
+                playBeepTone(freq, 0.35, wave, 0.8);
+                step++;
+            }, 280);
+        } else {
+            // SIRINE GEMPA (Frequency 980Hz - 750Hz, Sawtooth Wave)
+            playBeepTone(880, 0.3, "sawtooth", 0.6);
+            state.alarmInterval = setInterval(() => {
+                if (state.isMuted) return;
+                const freq = step % 2 === 0 ? 980 : 750;
+                playBeepTone(freq, 0.32, "sawtooth", 0.6);
+                step++;
+            }, 360);
+        }
     }
 
     function stopAlarmSound() {
@@ -175,16 +202,58 @@
         }
     }
 
+    function requestNotificationPermission() {
+        if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+            Notification.requestPermission().catch(() => {});
+        }
+    }
+
+    async function triggerSystemNotification(title, body) {
+        if (!("Notification" in window) || Notification.permission !== "granted") {
+            return;
+        }
+
+        const options = {
+            body: body,
+            requireInteraction: true,
+            vibrate: [1000, 300, 1000, 300, 1000],
+            tag: "disaster-alert-notification",
+            renotify: true,
+        };
+
+        // Di Android Chrome, Service Worker showNotification adalah metode standar yang diizinkan OS
+        if ("serviceWorker" in navigator) {
+            try {
+                const reg = await navigator.serviceWorker.ready;
+                if (reg && reg.showNotification) {
+                    await reg.showNotification(title, options);
+                    return;
+                }
+            } catch (swErr) {
+                console.warn("ServiceWorker showNotification error:", swErr);
+            }
+        }
+
+        // Fallback untuk desktop browser
+        try {
+            new Notification(title, options);
+        } catch (err) {
+            console.warn("Desktop Notification fallback error:", err);
+        }
+    }
+
     function startVibration() {
         if (!("vibrate" in navigator)) return;
         stopVibration();
 
         try {
-            // Pola getar berulang: 500ms getar, 200ms diam, 500ms getar, 200ms diam, 1000ms getar
-            navigator.vibrate([500, 200, 500, 200, 1000]);
+            // Pola getar berulang: 1000ms getar, 300ms diam, 1000ms getar
+            navigator.vibrate([1000, 300, 1000, 300, 1000]);
             state.vibrationInterval = setInterval(() => {
-                navigator.vibrate([500, 200, 500, 200, 1000]);
-            }, 2600);
+                try {
+                    navigator.vibrate([1000, 300, 1000, 300, 1000]);
+                } catch (e) {}
+            }, 3000);
         } catch (err) {
             console.warn("Gagal getar:", err);
         }
@@ -198,57 +267,53 @@
         if ("vibrate" in navigator) {
             try {
                 navigator.vibrate(0);
-            } catch (err) {
-                // ignore
-            }
+            } catch (err) {}
         }
     }
 
     // -------------------------------------------------------------------------
-    // 4. WebSocket Manager
+    // 4. WebSocket Manager (Auto-Connect & Auto-Reconnect)
     // -------------------------------------------------------------------------
     function connectWebSocket() {
         if (state.ws && (state.ws.readyState === WebSocket.OPEN || state.ws.readyState === WebSocket.CONNECTING)) {
-            disconnectWebSocket();
             return;
         }
 
-        const ip = dom.serverIp.value.trim();
-        const port = dom.serverPort.value.trim();
-
-        if (!ip || !port) {
-            showNotification("Input Tidak Lengkap", "Silakan masukkan IP dan Port server.");
-            return;
-        }
+        const ip = dom.serverIp.value.trim() || window.location.hostname || "127.0.0.1";
+        const port = dom.serverPort.value.trim() || window.location.port || "8000";
 
         localStorage.setItem("seismic_user_server_ip", ip);
         localStorage.setItem("seismic_user_server_port", port);
 
         const wsUrl = `ws://${ip}:${port}/ws/user`;
         updateWsStatus("CONNECTING...", "connecting");
-        dom.connectBtn.disabled = true;
-        hideNotification();
+        if (dom.connectBtn) dom.connectBtn.disabled = true;
 
         try {
             state.ws = new WebSocket(wsUrl);
         } catch (err) {
             updateWsStatus("ERROR", "disconnected");
-            showNotification("Koneksi Gagal", `Gagal inisialisasi WebSocket: ${err.message}`);
-            dom.connectBtn.disabled = false;
+            if (dom.connectBtn) dom.connectBtn.disabled = false;
+            scheduleReconnect();
             return;
         }
 
         state.ws.onopen = () => {
             state.wsConnected = true;
+            if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
             updateWsStatus("CONNECTED", "connected");
-            dom.dashConnVal.textContent = "CONNECTED";
-            dom.dashConnVal.className = "dash-val val-green";
-            dom.connectBtn.textContent = "PUTUSKAN KONEKSI";
-            dom.connectBtn.classList.remove("btn-primary");
-            dom.connectBtn.classList.add("btn-danger");
-            dom.connectBtn.disabled = false;
 
-            // Muat riwayat alert dari database
+            if (dom.dashConnVal) {
+                dom.dashConnVal.textContent = "CONNECTED";
+                dom.dashConnVal.className = "dash-val val-green";
+            }
+            if (dom.connectBtn) {
+                dom.connectBtn.textContent = "PUTUSKAN KONEKSI";
+                dom.connectBtn.classList.remove("btn-primary");
+                dom.connectBtn.classList.add("btn-danger");
+                dom.connectBtn.disabled = false;
+            }
+
             fetchRecentAlerts();
         };
 
@@ -257,26 +322,41 @@
         };
 
         state.ws.onerror = (err) => {
-            console.error("User WebSocket Error:", err);
-            showNotification(
-                "WebSocket Terputus",
-                `Tidak dapat terhubung ke ${wsUrl}. Pastikan server aktif dan HP terhubung ke Wi-Fi yang sama.`
-            );
+            console.warn("User WebSocket error, reconnecting...", err);
+            scheduleReconnect();
         };
 
         state.ws.onclose = () => {
             state.wsConnected = false;
             updateWsStatus("DISCONNECTED", "disconnected");
-            dom.dashConnVal.textContent = "DISCONNECTED";
-            dom.dashConnVal.className = "dash-val val-muted";
-            dom.connectBtn.textContent = "HUBUNGKAN KE SERVER";
-            dom.connectBtn.classList.remove("btn-danger");
-            dom.connectBtn.classList.add("btn-primary");
-            dom.connectBtn.disabled = false;
+
+            if (dom.dashConnVal) {
+                dom.dashConnVal.textContent = "DISCONNECTED";
+                dom.dashConnVal.className = "dash-val val-muted";
+            }
+            if (dom.connectBtn) {
+                dom.connectBtn.textContent = "HUBUNGKAN KE SERVER";
+                dom.connectBtn.classList.remove("btn-danger");
+                dom.connectBtn.classList.add("btn-primary");
+                dom.connectBtn.disabled = false;
+            }
+
+            scheduleReconnect();
         };
     }
 
+    function scheduleReconnect() {
+        if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
+        state.reconnectTimer = setTimeout(() => {
+            if (!state.wsConnected) {
+                console.log("Mencoba menghubungkan ulang WebSocket...");
+                connectWebSocket();
+            }
+        }, 3000);
+    }
+
     function disconnectWebSocket() {
+        if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
         if (state.ws) {
             state.ws.close();
             state.ws = null;
@@ -286,8 +366,8 @@
     }
 
     function updateWsStatus(text, statusClass) {
-        dom.wsStatusText.textContent = text;
-        dom.wsDot.className = `dot ${statusClass}`;
+        if (dom.wsStatusText) dom.wsStatusText.textContent = text;
+        if (dom.wsDot) dom.wsDot.className = `dot ${statusClass}`;
     }
 
     // -------------------------------------------------------------------------
@@ -302,8 +382,10 @@
                 return;
             }
 
-            // Menerima Event Broadcast Alert dari Server
+            // Menerima Event Broadcast Alert dari Server (Gempa & Banjir)
             if (data.type === "EARTHQUAKE_ALERT" && data.status === "ANOMALY_VIBRATION") {
+                triggerEmergencyWarning(data);
+            } else if (data.type === "FLOOD_ALERT") {
                 triggerEmergencyWarning(data);
             }
         } catch (err) {
@@ -315,36 +397,86 @@
      * Menampilkan Fullscreen Emergency Warning Overlay dan memicu alarm
      */
     function triggerEmergencyWarning(data) {
-        state.isAlertActive = true;
-        state.isMuted = false;
+        try {
+            state.isAlertActive = true;
+            state.isMuted = false;
 
-        const dateObj = data.timestamp ? new Date(data.timestamp * 1000) : new Date();
-        const timeStr = dateObj.toLocaleTimeString();
-        state.lastAlertTimeStr = timeStr;
+            const dateObj = data.timestamp ? new Date(data.timestamp * 1000) : new Date();
+            const timeStr = dateObj.toLocaleTimeString();
+            state.lastAlertTimeStr = timeStr;
 
-        // Update dashboard status
-        dom.dashLastAlertVal.textContent = timeStr;
-        dom.dashLastAlertVal.className = "dash-val val-green";
+            // Customization per Hazard Type
+            if (data.type === "FLOOD_ALERT") {
+                if (dom.dashFloodVal) {
+                    dom.dashFloodVal.textContent = data.status || "ALERT";
+                    dom.dashFloodVal.className = "dash-val val-red";
+                }
 
-        // Update isi overlay
-        dom.alertSourceVal.textContent = data.source_device || "Unknown";
-        dom.alertTimeVal.textContent = timeStr;
-        dom.alertParamsVal.textContent = `RMS: ${(data.rms || 0).toFixed(4)} m/s² | Peak: ${(data.peak || 0).toFixed(4)} m/s²`;
+                if (data.status === "FLOOD_CRITICAL") {
+                    if (dom.overlayIcon) dom.overlayIcon.textContent = "🚨";
+                    if (dom.overlayTitle) dom.overlayTitle.textContent = "BAHAYA BANJIR KRITIS";
+                    if (dom.overlaySubtitle) dom.overlaySubtitle.textContent = "FLOOD CRITICAL";
+                } else if (data.status === "FLOOD_ALERT") {
+                    if (dom.overlayIcon) dom.overlayIcon.textContent = "🌊";
+                    if (dom.overlayTitle) dom.overlayTitle.textContent = "SIAGA BANJIR";
+                    if (dom.overlaySubtitle) dom.overlaySubtitle.textContent = "FLOOD ALERT";
+                } else {
+                    if (dom.overlayIcon) dom.overlayIcon.textContent = "💧";
+                    if (dom.overlayTitle) dom.overlayTitle.textContent = "PERINGATAN BANJIR";
+                    if (dom.overlaySubtitle) dom.overlaySubtitle.textContent = "FLOOD WARNING";
+                }
 
-        // Tampilkan fullscreen warning overlay
-        dom.alertOverlay.style.display = "flex";
-        dom.muteAlarmBtn.textContent = "🔇 MATIKAN SUARA";
+                if (dom.overlayDesc) dom.overlayDesc.textContent = data.message || "Potensi banjir terdeteksi oleh sensor.";
+                if (dom.alertSourceVal) dom.alertSourceVal.textContent = data.source_device || "flood-node";
+                if (dom.alertTimeVal) dom.alertTimeVal.textContent = timeStr;
+                if (dom.alertParamsVal) dom.alertParamsVal.textContent = `Water Level: ${data.water_level} cm | Rise Rate: ${data.rate_of_rise} cm/h`;
 
-        // Bunyikan audio & aktifkan getaran jika sistem di-ARMED
-        if (state.isArmed) {
-            startAlarmSound();
-            startVibration();
-        } else {
-            console.log("Alert diterima namun sistem belum di-ARMED. Audio diabaikan.");
+            } else {
+                // EARTHQUAKE_ALERT
+                if (dom.dashQuakeVal) {
+                    dom.dashQuakeVal.textContent = "ANOMALY";
+                    dom.dashQuakeVal.className = "dash-val val-red";
+                }
+
+                if (dom.overlayIcon) dom.overlayIcon.textContent = "⚠️";
+                if (dom.overlayTitle) dom.overlayTitle.textContent = "WARNING GEMPA";
+                if (dom.overlaySubtitle) dom.overlaySubtitle.textContent = "ANOMALI GETARAN TERDETEKSI";
+                if (dom.overlayDesc) dom.overlayDesc.textContent = data.message || "Indikasi getaran abnormal terdeteksi.";
+
+                if (dom.alertSourceVal) dom.alertSourceVal.textContent = data.source_device || "Unknown";
+                if (dom.alertTimeVal) dom.alertTimeVal.textContent = timeStr;
+                if (dom.alertParamsVal) dom.alertParamsVal.textContent = `RMS: ${(data.rms || 0).toFixed(4)} m/s² | Peak: ${(data.peak || 0).toFixed(4)} m/s²`;
+            }
+
+            // TAMPILKAN OVERLAY LAYAR PENUH (Dual-method untuk keandalan maksimal di HP)
+            if (dom.alertOverlay) {
+                dom.alertOverlay.classList.add("active");
+                dom.alertOverlay.style.display = "flex";
+            }
+            if (dom.muteAlarmBtn) dom.muteAlarmBtn.textContent = "🔇 MATIKAN SUARA";
+
+            // Pemicu Notifikasi Sistem OS (Heads-up Notification di HP saat diminimize)
+            const notifTitle = (data.type === "FLOOD_ALERT") ? `🚨 ${data.status || "PERINGATAN BANJIR"}` : "⚠️ WARNING GEMPA";
+            const notifBody = data.message || "Anomali terdeteksi oleh sistem monitoring!";
+            triggerSystemNotification(notifTitle, notifBody);
+
+            // Bunyikan audio & aktifkan getaran jika sistem di-ARMED
+            if (state.isArmed) {
+                startAlarmSound(data.type);
+                startVibration();
+            } else {
+                console.log("Alert diterima namun sistem belum di-ARMED. Audio/getaran standby.");
+            }
+
+            fetchRecentAlerts();
+        } catch (err) {
+            console.error("Error in triggerEmergencyWarning:", err);
+            // Fallback penting: pastikan overlay tetap muncul
+            if (dom.alertOverlay) {
+                dom.alertOverlay.classList.add("active");
+                dom.alertOverlay.style.display = "flex";
+            }
         }
-
-        // Segera refresh daftar histori
-        fetchRecentAlerts();
     }
 
     // -------------------------------------------------------------------------
@@ -352,30 +484,50 @@
     // -------------------------------------------------------------------------
     function armAlertSystem() {
         ensureAudioContext();
+        requestNotificationPermission();
         state.isArmed = true;
 
-        dom.armDot.className = "dot armed";
-        dom.armStatusText.textContent = "ARMED";
-        dom.dashArmVal.textContent = "ARMED";
-        dom.dashArmVal.className = "dash-val val-green";
+        // Auto-connect websocket jika belum terhubung
+        if (!state.wsConnected) {
+            connectWebSocket();
+        }
 
-        dom.sysBanner.className = "status-banner status-waiting";
-        dom.sysBannerText.textContent = "SYSTEM ARMED (MONITORING)";
+        // Test getaran singkat
+        if ("vibrate" in navigator) {
+            try { navigator.vibrate(300); } catch (e) {}
+        }
 
-        dom.armBtn.textContent = "✓ SISTEM PERINGATAN AKTIF (ARMED)";
-        dom.armBtn.classList.remove("btn-success");
-        dom.armBtn.classList.add("btn-secondary");
+        // Screen Wake Lock (Mencegah layar HP mati/sleep otomatis saat monitoring)
+        if ("wakeLock" in navigator && !state.wakeLockSentinel) {
+            try {
+                navigator.wakeLock.request("screen").then((sentinel) => {
+                    state.wakeLockSentinel = sentinel;
+                }).catch(() => {});
+            } catch (e) {}
+        }
+
+        if (dom.armDot) dom.armDot.className = "dot armed";
+        if (dom.armStatusText) dom.armStatusText.textContent = "ARMED";
+
+        if (dom.sysBanner) dom.sysBanner.className = "status-banner status-waiting";
+        if (dom.sysBannerText) dom.sysBannerText.textContent = "SYSTEM ARMED (MONITORING)";
+
+        if (dom.armBtn) {
+            dom.armBtn.textContent = "✓ SISTEM PERINGATAN AKTIF (ARMED)";
+            dom.armBtn.classList.remove("btn-success");
+            dom.armBtn.classList.add("btn-secondary");
+        }
 
         showNotification(
             "Sistem Peringatan Aktif",
-            "Audio context & getaran telah diizinkan. Perangkat Anda siap berbunyi saat getaran terdeteksi."
+            "Audio, notifikasi OS, & getaran telah diizinkan. Perangkat siap berbunyi & bergetar saat anomali terdeteksi."
         );
     }
 
     function muteAlarm() {
         state.isMuted = true;
         stopAlarmSound();
-        dom.muteAlarmBtn.textContent = "✓ SUARA DIMATIKAN";
+        if (dom.muteAlarmBtn) dom.muteAlarmBtn.textContent = "✓ SUARA DIMATIKAN";
     }
 
     function dismissAlert() {
@@ -384,10 +536,12 @@
         state.isAlertActive = false;
         state.isMuted = false;
 
-        dom.alertOverlay.style.display = "none";
+        if (dom.alertOverlay) {
+            dom.alertOverlay.classList.remove("active");
+            dom.alertOverlay.style.display = "none";
+        }
 
-        // Sistem tetap terhubung dan kembali ARMED untuk alert selanjutnya
-        if (state.isArmed) {
+        if (state.isArmed && dom.sysBannerText) {
             dom.sysBannerText.textContent = "SYSTEM ARMED (MONITORING)";
         }
     }
@@ -395,12 +549,14 @@
     function testAlarmPreview() {
         armAlertSystem();
         const dummyData = {
-            type: "EARTHQUAKE_ALERT",
-            status: "ANOMALY_VIBRATION",
-            source_device: "android-test-node",
+            type: "FLOOD_ALERT",
+            status: "FLOOD_CRITICAL",
+            source_device: "flood-node-test",
             timestamp: Date.now() / 1000,
-            rms: 0.8421,
-            peak: 1.4258,
+            water_level: 82.5,
+            rate_of_rise: 6.2,
+            rainfall: 35.0,
+            message: "Ketinggian air berada pada level kritis",
         };
         triggerEmergencyWarning(dummyData);
     }
@@ -420,28 +576,30 @@
             const alerts = json.alerts || [];
 
             if (alerts.length === 0) {
-                dom.alertsList.innerHTML = `<div class="history-empty">Belum ada riwayat anomali getaran tercatat.</div>`;
+                if (dom.alertsList) dom.alertsList.innerHTML = `<div class="history-empty">Belum ada riwayat anomali/peringatan tercatat.</div>`;
                 return;
             }
 
-            dom.alertsList.innerHTML = "";
-            alerts.forEach((alt) => {
-                const dateObj = new Date(alt.timestamp * 1000);
-                const timeStr = dateObj.toLocaleTimeString();
+            if (dom.alertsList) {
+                dom.alertsList.innerHTML = "";
+                alerts.forEach((alt) => {
+                    const dateObj = new Date(alt.timestamp * 1000);
+                    const timeStr = dateObj.toLocaleTimeString();
 
-                const item = document.createElement("div");
-                item.className = "history-item";
-                item.innerHTML = `
-                    <div class="history-item-top">
-                        <span class="history-item-title">⚠️ ${alt.message || "Anomali Getaran"}</span>
-                        <span class="history-item-time">${timeStr}</span>
-                    </div>
-                    <div class="history-item-sub">
-                        Source: <strong>${alt.source_device}</strong> | RMS: ${Number(alt.rms).toFixed(4)} | Peak: ${Number(alt.peak).toFixed(4)}
-                    </div>
-                `;
-                dom.alertsList.appendChild(item);
-            });
+                    const item = document.createElement("div");
+                    item.className = "history-item";
+                    item.innerHTML = `
+                        <div class="history-item-top">
+                            <span class="history-item-title">⚠️ ${alt.message || "Anomali Terdeteksi"}</span>
+                            <span class="history-item-time">${timeStr}</span>
+                        </div>
+                        <div class="history-item-sub">
+                            Source: <strong>${alt.source_device}</strong> | Status: ${alt.status}
+                        </div>
+                    `;
+                    dom.alertsList.appendChild(item);
+                });
+            }
         } catch (err) {
             console.warn("Gagal memuat histori alert:", err);
         }
@@ -450,16 +608,37 @@
     // -------------------------------------------------------------------------
     // 8. Event Listeners & Bootstrapping
     // -------------------------------------------------------------------------
-    dom.connectBtn.addEventListener("click", connectWebSocket);
-    dom.armBtn.addEventListener("click", armAlertSystem);
-    dom.testAlarmBtn.addEventListener("click", testAlarmPreview);
-    dom.muteAlarmBtn.addEventListener("click", muteAlarm);
-    dom.dismissAlertBtn.addEventListener("click", dismissAlert);
-    dom.refreshHistoryBtn.addEventListener("click", fetchRecentAlerts);
-    dom.userNotificationClose.addEventListener("click", hideNotification);
+    if (dom.connectBtn) {
+        dom.connectBtn.addEventListener("click", () => {
+            if (state.wsConnected) {
+                disconnectWebSocket();
+            } else {
+                connectWebSocket();
+            }
+        });
+    }
+
+    if (dom.armBtn) dom.armBtn.addEventListener("click", armAlertSystem);
+    if (dom.testAlarmBtn) dom.testAlarmBtn.addEventListener("click", testAlarmPreview);
+    if (dom.muteAlarmBtn) dom.muteAlarmBtn.addEventListener("click", muteAlarm);
+    if (dom.dismissAlertBtn) dom.dismissAlertBtn.addEventListener("click", dismissAlert);
+    if (dom.refreshHistoryBtn) dom.refreshHistoryBtn.addEventListener("click", fetchRecentAlerts);
+    if (dom.userNotificationClose) dom.userNotificationClose.addEventListener("click", hideNotification);
+
+    // Saat tab kembali dibuka setelah diminimize, pastikan overlay tetap muncul jika alert sedang aktif
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && state.isAlertActive) {
+            if (dom.alertOverlay) {
+                dom.alertOverlay.classList.add("active");
+                dom.alertOverlay.style.display = "flex";
+            }
+        }
+    });
 
     // Inisialisasi awal
     initConnectionInputs();
     checkDeviceCapabilities();
     fetchRecentAlerts();
+    // AUTO CONNECT WEBSOCKET SAAT HALAMAN DIBUKA
+    connectWebSocket();
 })();

@@ -35,6 +35,19 @@ CREATE TABLE IF NOT EXISTS alerts (
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_ts
     ON alerts (timestamp);
+
+CREATE TABLE IF NOT EXISTS flood_readings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id TEXT NOT NULL,
+    timestamp REAL NOT NULL,
+    water_level REAL NOT NULL,
+    rate_of_rise REAL NOT NULL,
+    rainfall REAL NOT NULL,
+    status TEXT NOT NULL,
+    risk_level INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_flood_readings_ts
+    ON flood_readings (timestamp);
 """
 
 
@@ -124,5 +137,39 @@ def fetch_latest_alerts(limit: int = 50) -> list[dict]:
     with closing(_connect()) as conn:
         rows = conn.execute(
             "SELECT * FROM alerts ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def save_flood_reading(
+    device_id: str,
+    timestamp: float,
+    water_level: float,
+    rate_of_rise: float,
+    rainfall: float,
+    status: str,
+    risk_level: int,
+) -> int:
+    """Simpan satu baris data sensor banjir. Melempar sqlite3.Error jika gagal."""
+    with closing(_connect()) as conn:
+        with conn:
+            cur = conn.execute(
+                """
+                INSERT INTO flood_readings
+                (device_id, timestamp, water_level, rate_of_rise,
+                 rainfall, status, risk_level)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (device_id, timestamp, water_level, rate_of_rise,
+                 rainfall, status, risk_level),
+            )
+            return int(cur.lastrowid)
+
+
+def get_recent_flood_readings(limit: int = 50) -> list[dict]:
+    """Ambil data flood terbaru dari tabel flood_readings."""
+    with closing(_connect()) as conn:
+        rows = conn.execute(
+            "SELECT * FROM flood_readings ORDER BY id DESC LIMIT ?", (limit,)
         ).fetchall()
     return [dict(r) for r in rows]

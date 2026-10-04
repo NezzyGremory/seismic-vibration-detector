@@ -465,16 +465,28 @@ body {
    FULLSCREEN EMERGENCY WARNING OVERLAY
    ========================================================================== */
 .alert-overlay {
+    display: none;
     position: fixed;
-    inset: 0;
-    z-index: 99999;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999999 !important;
     background-color: rgba(15, 2, 2, 0.96);
-    display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 16px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     animation: emergency-bg 1s infinite alternate;
 }
+
+.alert-overlay.active {
+    display: flex !important;
+}
+
 
 @keyframes emergency-bg {
     0% { background-color: rgba(15, 2, 2, 0.96); }
@@ -483,17 +495,19 @@ body {
 
 .overlay-container {
     width: 100%;
-    max-width: 480px;
+    max-width: 440px;
+    max-height: 90vh;
+    overflow-y: auto;
     background: #200606;
     border: 2px solid #ef4444;
-    box-shadow: 0 0 35px rgba(239, 68, 68, 0.6), inset 0 0 20px rgba(239, 68, 68, 0.2);
+    box-shadow: 0 0 35px rgba(239, 68, 68, 0.7), inset 0 0 20px rgba(239, 68, 68, 0.3);
     border-radius: 16px;
-    padding: 24px 20px;
+    padding: 20px 16px;
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: 14px;
+    gap: 12px;
     position: relative;
     animation: modal-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
@@ -504,7 +518,7 @@ body {
 }
 
 .overlay-icon {
-    font-size: 3.5rem;
+    font-size: 3.2rem;
     line-height: 1;
     animation: bounce-warning 0.6s infinite alternate;
 }
@@ -515,16 +529,16 @@ body {
 }
 
 .overlay-title {
-    font-size: 1.8rem;
+    font-size: 1.6rem;
     font-weight: 900;
     color: #ef4444;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     line-height: 1.1;
     text-shadow: 0 0 12px rgba(239, 68, 68, 0.6);
 }
 
 .overlay-subtitle {
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 800;
     color: #ffffff;
     letter-spacing: 0.04em;
@@ -542,19 +556,20 @@ body {
     background: #140303;
     border: 1px solid #7f1d1d;
     border-radius: 8px;
-    padding: 10px 14px;
+    padding: 10px 12px;
     display: flex;
     flex-direction: column;
     gap: 6px;
     text-align: left;
     font-family: var(--font-mono);
-    font-size: 0.8rem;
+    font-size: 0.78rem;
 }
 
 .detail-row {
     display: flex;
     justify-content: space-between;
     gap: 10px;
+    flex-wrap: wrap;
 }
 
 .detail-label {
@@ -563,6 +578,7 @@ body {
 
 .detail-value {
     color: #fee2e2;
+    word-break: break-all;
 }
 
 .overlay-actions {
@@ -570,14 +586,14 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    margin-top: 6px;
+    margin-top: 4px;
 }
 
 .btn-overlay-mute {
     background: #3f1515;
     color: #fca5a5;
     border: 1px solid #7f1d1d;
-    padding: 10px;
+    padding: 12px;
     border-radius: 8px;
     font-weight: 700;
     font-size: 0.85rem;
@@ -612,7 +628,7 @@ body {
 }
 
 /* ==========================================================================
-   Footer
+   Footer & Mobile Breakpoints
    ========================================================================== */
 .footer {
     padding: 10px 0 20px 0;
@@ -632,3 +648,39 @@ body {
 .disclaimer strong {
     color: #cbd5e1;
 }
+
+@media (max-width: 480px) {
+    body {
+        padding: 8px;
+    }
+
+    .container {
+        gap: 10px;
+    }
+
+    .grid-2 {
+        grid-template-columns: 1fr;
+    }
+
+    .header-title-box h1 {
+        font-size: 1.25rem;
+    }
+
+    .status-banner {
+        font-size: 0.95rem;
+        padding: 10px 12px;
+    }
+
+    .card {
+        padding: 12px;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .overlay-title {
+        font-size: 1.35rem;
+    }
+}
+

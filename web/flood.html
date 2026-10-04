@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Flood Sensor</title>
+
+    <link
+        rel="stylesheet"
+        href="/web/flood.css"
+    >
+</head>
+
+<body>
+
+    <main class="container">
+
+        <header class="header">
+
+            <p class="system-label">
+                DISASTER MONITORING
+            </p>
+
+            <h1>
+                Flood Sensor
+            </h1>
+
+            <p class="subtitle">
+                Virtual Flood Monitoring
+            </p>
+
+        </header>
+
+
+        <section class="card">
+
+            <h2>
+                Sensor Data
+            </h2>
+
+
+            <div class="form-group">
+
+                <label for="deviceId">
+                    Device ID
+                </label>
+
+                <input
+                    id="deviceId"
+                    type="text"
+                    value="flood-node-001"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="waterLevel">
+                    Water Level
+                    <span>(cm)</span>
+                </label>
+
+                <input
+                    id="waterLevel"
+                    type="number"
+                    value="20"
+                    min="0"
+                    step="0.1"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="rateOfRise">
+                    Rate of Rise
+                    <span>(cm/hour)</span>
+                </label>
+
+                <input
+                    id="rateOfRise"
+                    type="number"
+                    value="1"
+                    step="0.1"
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="rainfall">
+                    Rainfall
+                    <span>(mm/hour)</span>
+                </label>
+
+                <input
+                    id="rainfall"
+                    type="number"
+                    value="0"
+                    min="0"
+                    step="0.1"
+                >
+
+            </div>
+
+
+            <button
+                id="sendButton"
+                type="button"
+            >
+                Send Manual Data
+            </button>
+
+        </section>
+
+
+        <section class="card simulation-card">
+
+            <h2>
+                Auto Sensor Simulation
+            </h2>
+
+            <p class="info" style="margin-bottom: 16px;">
+                Simulasikan kenaikan ketinggian air secara otomatis dari normal (20cm) hingga kritis (80cm) untuk pengujian realtime alert.
+            </p>
+
+            <div class="btn-group-row">
+                <button
+                    id="startSimButton"
+                    type="button"
+                    class="btn-success"
+                >
+                    ▶ START AUTO SIMULATION
+                </button>
+
+                <button
+                    id="stopSimButton"
+                    type="button"
+                    class="btn-danger"
+                    disabled
+                >
+                    ⏹ STOP SIMULATION
+                </button>
+            </div>
+
+            <div class="sim-stats">
+                <div>
+                    <span>Sensor Mode:</span>
+                    <strong id="simModeText">MANUAL</strong>
+                </div>
+                <div>
+                    <span>Packets Sent:</span>
+                    <strong id="simCountText">0</strong>
+                </div>
+            </div>
+
+        </section>
+
+
+
+        <section class="card status-card">
+
+            <p class="status-label">
+                CURRENT STATUS
+            </p>
+
+            <div
+                id="status"
+                class="status normal"
+            >
+                WAITING
+            </div>
+
+            <p id="message">
+                Belum ada data sensor yang dikirim.
+            </p>
+
+        </section>
+
+
+        <section class="card">
+
+            <h2>
+                Prototype Information
+            </h2>
+
+            <p class="info">
+                Halaman ini berfungsi sebagai
+                virtual sensor banjir untuk tahap
+                prototype. Nilai sensor nantinya
+                dapat digantikan oleh perangkat
+                IoT seperti ESP32 dan sensor
+                ketinggian air.
+            </p>
+
+        </section>
+
+    </main>
+
+
+    <script src="/web/flood.js"></script>
+
+</body>
+
+</html>
