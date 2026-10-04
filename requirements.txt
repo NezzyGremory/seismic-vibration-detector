@@ -1,8 +1,18 @@
-fastapi
-uvicorn[standard]
-numpy
-pydantic
+# ============================================================
+# Core Framework & Server
+# ============================================================
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+websockets>=12.0
+pydantic>=2.6.0
 
-# hanya untuk menjalankan tests/test_api.py
-pytest
-httpx
+# ============================================================
+# Scientific Computing & Feature Extraction
+# ============================================================
+numpy>=1.26.0
+
+# ============================================================
+# Automated Testing
+# ============================================================
+pytest>=8.0.0
+httpx>=0.27.0
